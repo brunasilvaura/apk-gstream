@@ -1,0 +1,54 @@
+name: Gerar APK
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Instalar dependências
+        run: npm install
+
+      - name: Criar projeto Android
+        run: npx cap add android
+
+      - name: Colocar o ícone do app
+        run: cp -r icones/res/. android/app/src/main/res/
+
+      - name: Ajustar para Android TV / TV box
+        run: python3 scripts/patch_manifest.py
+
+      - name: Copiar o site (www) para o Android
+        run: npx cap sync android
+
+      - name: Usar a MESMA chave de assinatura em todo build
+        run: |
+          mkdir -p ~/.android
+          cp keystore/debug.keystore ~/.android/debug.keystore
+          sed -i "s/versionCode 1/versionCode ${{ github.run_number }}/" android/app/build.gradle
+
+      - name: Compilar APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Guardar APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: FilmesESeries-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
